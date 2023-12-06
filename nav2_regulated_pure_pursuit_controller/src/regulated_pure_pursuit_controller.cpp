@@ -117,6 +117,16 @@ void RegulatedPurePursuitController::configure(
   declare_parameter_if_not_declared(
     node, plugin_name_ + ".use_interpolation",
     rclcpp::ParameterValue(true));
+  
+  declare_parameter_if_not_declared(
+    node, plugin_name_ + ".no_turn_on_approach",
+    rclcpp::ParameterValue(false));
+  declare_parameter_if_not_declared(
+    node, plugin_name_ + ".approach_distance_threshold",
+    rclcpp::ParameterValue(0.2));
+  declare_parameter_if_not_declared(
+    node, plugin_name_ + ".goal_tolerance",
+    rclcpp::ParameterValue(0.1));
 
   node->get_parameter(plugin_name_ + ".desired_linear_vel", desired_linear_vel_);
   base_desired_linear_vel_ = desired_linear_vel_;
@@ -176,6 +186,16 @@ void RegulatedPurePursuitController::configure(
   node->get_parameter(
     plugin_name_ + ".use_interpolation",
     use_interpolation_);
+
+  node->get_parameter(
+    plugin_name_ + ".no_turn_on_approach",
+    no_turn_on_approach_);
+  node->get_parameter(
+    plugin_name_ + ".approach_distance_threshold",
+    approach_distance_threshold_);
+  node->get_parameter(
+    plugin_name_ + ".goal_tolerance",
+    goal_tolerance_);
 
   transform_tolerance_ = tf2::durationFromSec(transform_tolerance);
   control_duration_ = 1.0 / control_frequency;
@@ -349,8 +369,12 @@ geometry_msgs::msg::TwistStamped RegulatedPurePursuitController::computeVelocity
       costAtPose(pose.pose.position.x, pose.pose.position.y), transformed_plan,
       linear_vel, sign);
 
-    // Apply curvature to angular velocity after constraining linear velocity
-    angular_vel = linear_vel * curvature;
+    if (shouldStopFollowCarrot(carrot_pose)){
+      angular_vel = 0.0;
+    } else {
+      // Apply curvature to angular velocity after constraining linear velocity
+      angular_vel = linear_vel * curvature;
+    }
   }
 
   // Collision checking on this velocity heading
@@ -381,6 +405,16 @@ bool RegulatedPurePursuitController::shouldRotateToGoalHeading(
   // Whether we should rotate robot to goal heading
   double dist_to_goal = std::hypot(carrot_pose.pose.position.x, carrot_pose.pose.position.y);
   return use_rotate_to_heading_ && dist_to_goal < goal_dist_tol_;
+}
+
+bool RegulatedPurePursuitController::shouldStopFollowCarrot(const geometry_msgs::msg::PoseStamped & carrot_pose){
+  // Whether we should refrain from turning too sharply close to the goal
+  double carrot_dist = hypot(carrot_pose.pose.position.x, carrot_pose.pose.position.y);
+  if(fabs(carrot_pose.pose.position.y) > goal_tolerance_ * 0.9){
+    // Likely to miss the goal if we go ahead, so we allow turning
+    return false;
+  }
+  return (no_turn_on_approach_ && carrot_dist < approach_distance_threshold_);
 }
 
 void RegulatedPurePursuitController::rotateToHeading(

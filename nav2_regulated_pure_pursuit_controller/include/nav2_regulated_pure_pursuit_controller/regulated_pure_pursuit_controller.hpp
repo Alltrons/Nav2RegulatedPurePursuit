@@ -165,6 +165,19 @@ protected:
   bool shouldRotateToGoalHeading(const geometry_msgs::msg::PoseStamped & carrot_pose);
 
   /**
+   * Option to limit turning when robot is closer than *approach_distance_threshold_*
+   * to the lookahead point. This is to prevent the robot from turning aggressively
+   * on the final approach when there is a slight offset between the goal and the robot's heading.
+   * This option is controlled by the *no_turn_on_approach_* parameter.
+   * *approach_distance_threshold_* should be smaller
+   * than *min_lookahead_dist_* to prevent this behaviour from triggering unneccesarily.
+   * 
+   * @param carrot_dist distance to the current lookahead point
+   * @return whether to stop turning towards the lookahead point
+   */
+  bool shouldStopFollowCarrot(const geometry_msgs::msg::PoseStamped & carrot_pose);
+
+  /**
    * @brief Create a smooth and kinematically smoothed rotation command
    * @param linear_vel linear velocity
    * @param angular_vel angular velocity
@@ -307,6 +320,10 @@ protected:
   bool allow_reversing_;
   double max_robot_pose_search_dist_;
   bool use_interpolation_;
+
+  bool no_turn_on_approach_;
+  double approach_distance_threshold_;
+  double goal_tolerance_;
 
   nav_msgs::msg::Path global_plan_;
   std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>> global_path_pub_;
